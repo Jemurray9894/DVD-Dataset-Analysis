@@ -1,0 +1,128 @@
+-- Business Problem: Identify which store has the least number of rentals processed. 
+
+
+-- Creates empty detailed table 
+DROP TABLE IF EXISTS detailed_table;
+Create Table detailed_table (
+		store_id integer,
+		manager_staff_id integer,
+		staff_id integer,
+		rental_id integer,
+		rental_date timestamp 
+		
+		
+);
+
+
+-- SELECT * FROM detailed_table;
+-- Will display empty detailed table
+
+
+-- Creates empty summary table
+DROP TABLE IF EXISTS summary_table;
+CREATE TABLE summary_table(
+		store_id integer,
+		staff_id integer,
+		rental_count integer
+);
+
+-- SELECT * FROM summary_table
+-- Will display empty summary table
+
+
+-- Inserting the raw data into the detailed table
+
+INSERT INTO detailed_table(
+		store_id,
+		manager_staff_id,
+		staff_id,
+		rental_id,
+		rental_date
+)
+SELECT 
+	s.store_id,
+	s.manager_staff_id,
+	sta.staff_id,
+	r.rental_id,
+	r.rental_date
+
+FROM store AS s
+INNER JOIN staff AS sta ON sta.store_id = s.store_id
+INNER JOIN rental as r ON r.staff_id = sta.staff_id;
+
+-- SELECT * FROM detailed_table
+-- Will display now filled detailed table
+
+-- To view raw data
+-- SELECT store_id, manager_staff_id FROM store;
+-- SELECT staff_id, store_id FROM staff;
+-- SELECT rental_id, rental_date, staff_id FROM rental;
+
+
+-- Creates funtion will count the number of rentals and order them in ascending order on the summary table
+
+CREATE FUNCTION store_rentals()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+AS
+$$
+BEGIN
+	DELETE FROM summary_table;
+	INSERT INTO summary_table (store_id, staff_id, rental_count)
+	SELECT
+		store_id,
+		staff_id,
+		COUNT(rental_id)
+	FROM detailed_table
+	GROUP BY store_id, staff_id
+	ORDER BY store_id, COUNT(rental_id) asc;
+RETURN NEW;
+END; 
+$$
+
+
+-- Creates trigger on the detailed_table that will refresh summary_table
+
+CREATE TRIGGER summary_table_refresh
+AFTER INSERT ON detailed_table
+FOR EACH STATEMENT
+EXECUTE FUNCTION store_rentals();
+
+
+-- Creates a stored procedure to refresh the detailed_table
+
+CREATE OR REPLACE FUNCTION detailed_refresh()
+RETURNS VOID
+LANGUAGE plpgsql
+AS
+$$
+BEGIN
+	DELETE FROM detailed_table;
+	
+	INSERT INTO detailed_table (
+		store_id,
+		manager_staff_id,
+		staff_id,
+		rental_id,
+		rental_date
+	)	
+	SELECT
+		s.store_id,
+		s.manager_staff_id,
+		sta.staff_id,
+		r.rental_id,
+		r.rental_date
+
+FROM store AS s
+INNER JOIN staff AS sta ON sta.store_id = s.store_id
+INNER JOIN rental as r ON r.staff_id = sta.staff_id;
+
+END;
+$$
+
+-- SELECT detailed_refresh();
+-- Calls to the stored procedure
+
+-- View results
+-- SELECT * FROM detailed_table;
+-- SELECT * FROM summary_table;
